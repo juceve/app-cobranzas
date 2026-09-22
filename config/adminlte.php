@@ -812,12 +812,13 @@ return [
             'icon' => 'bi bi-house',
         ],
         ['header' => 'ADMINISTRACIÓN'],
-        ['header' => 'SISTEMA'],
         [
             'text' => 'Empresas',
             'route' => 'companies.index',
             'icon' => 'bi bi-buildings',
         ],
+        ['header' => 'SISTEMA'],
+        
         [
             'text' => 'Usuarios',
             'route' => 'users.index',
