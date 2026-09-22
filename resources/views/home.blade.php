@@ -11,16 +11,17 @@
 
 @section('content_header')
     @hasSection('content_header_title')
-        <h1 class="text-muted">
+        <div class="d-flex flex-column gap-1">
+            <h1 class="h3 mb-0">
             @yield('content_header_title')
+            </h1>
 
             @hasSection('content_header_subtitle')
-                <small class="text-dark">
-                    <i class="fas fa-xs fa-angle-right text-muted"></i>
+                <p class="mb-0 text-body-secondary">
                     @yield('content_header_subtitle')
-                </small>
+                </p>
             @endif
-        </h1>
+        </div>
     @endif
 @stop
 
@@ -43,18 +44,6 @@
         </a>
     </strong>
 @stop --}}
-
-{{-- Add common Javascript/Jquery code --}}
-
-@push('js')
-<script>
-
-    $(document).ready(function() {
-        // Add your common script logic here...
-    });
-
-</script>
-@endpush
 
 {{-- Add common CSS customizations --}}
 

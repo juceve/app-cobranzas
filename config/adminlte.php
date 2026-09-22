@@ -773,6 +773,7 @@ return [
     */
 
     'menu' => [
+
         // Navbar items:
         // [
         //     'type' => 'navbar-search',
@@ -811,6 +812,22 @@ return [
             'icon' => 'bi bi-house',
         ],
         ['header' => 'ADMINISTRACIÓN'],
+        ['header' => 'SISTEMA'],
+        [
+            'text' => 'Empresas',
+            'route' => 'companies.index',
+            'icon' => 'bi bi-buildings',
+        ],
+        [
+            'text' => 'Usuarios',
+            'route' => 'users.index',
+            'icon' => 'bi bi-people',
+        ],
+        [
+            'text' => 'Roles y permisos',
+            'route' => 'roles.index',
+            'icon' => 'bi bi-shield-lock',
+        ],
         // [
         //     'text' => 'Inicio',
         //     'url' => 'admin/home',
