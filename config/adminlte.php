@@ -811,14 +811,35 @@ return [
             'url' => '/home',
             'icon' => 'bi bi-house',
         ],
+        ['header' => 'OPERACIÓN'],
+        [
+            'text' => 'Análisis de cartera',
+            'route' => 'analisis.index',
+            'icon' => 'bi bi-graph-up-arrow',
+        ],
+       
+        [
+            'text' => 'Lotes de cobranza',
+            'route' => 'lotes.index',
+            'icon' => 'bi bi-boxes',
+        ],
         ['header' => 'ADMINISTRACIÓN'],
         [
             'text' => 'Empresas',
             'route' => 'companies.index',
             'icon' => 'bi bi-buildings',
         ],
+        [
+            'text' => 'Carteras',
+            'route' => 'carteras',
+            'icon' => 'bi bi-wallet2',
+        ],
+        [
+            'text' => 'Deudores',
+            'route' => 'deudores.index',
+            'icon' => 'bi bi-people-fill',
+        ],
         ['header' => 'SISTEMA'],
-        
         [
             'text' => 'Usuarios',
             'route' => 'users.index',

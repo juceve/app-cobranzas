@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Models\Cartera;
 use App\Models\Company;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -85,7 +86,12 @@ class CompanyManagement extends Component
         ];
 
         if ($this->editingCompanyId === null) {
-            Company::create($attributes);
+            $company = Company::create($attributes);
+            if ($company) {
+                $cartera = Cartera::create([
+                    'company_id' => $company->id,                    
+                ]);
+            }
             $message = 'La empresa fue creada correctamente.';
         } else {
             Company::findOrFail($this->editingCompanyId)->update($attributes);

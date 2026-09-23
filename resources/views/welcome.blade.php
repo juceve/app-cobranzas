@@ -320,9 +320,9 @@
                 <div class="auth-links">
 
                     @auth
-                        <a href="{{ url('/dashboard') }}">
+                        <a href="{{ url('/home') }}">
                             <i class="bi bi-grid me-1"></i>
-                            Dashboard
+                            Home
                         </a>
                     @else
 

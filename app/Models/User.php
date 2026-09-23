@@ -16,7 +16,7 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasRoles, Notifiable;
+    use HasFactory, Notifiable, HasRoles;
 
     /**
      * Get the attributes that should be cast.
@@ -30,5 +30,15 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'password' => 'hashed',
         ];
+    }
+
+    public function lotesAsignados()
+    {
+        return $this->hasMany(Lote::class, 'user_id');
+    }
+
+    public function lotesCreados()
+    {
+        return $this->hasMany(Lote::class, 'created_by');
     }
 }

@@ -11,8 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('deudascateras', function (Blueprint $table) {
+        Schema::create('carteras', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('company_id')->nullable()->constrained('companies')->nullOnDelete();
+            $table->dateTime('ult_actualizacion')->nullable()->index();
             $table->timestamps();
         });
     }
@@ -22,6 +24,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('deudascateras');
+        Schema::dropIfExists('carteras');
     }
 };
