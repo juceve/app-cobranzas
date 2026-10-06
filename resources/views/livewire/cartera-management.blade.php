@@ -74,12 +74,12 @@
                                     <i class="bi bi-three-dots-vertical" aria-hidden="true"></i>
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                                    <li>
+                                    {{-- <li>
                                         <a href="{{ route('carteras', $cartera->id) }}" class="dropdown-item"
                                             wire:navigate>
                                             <i class="bi bi-people me-2" aria-hidden="true"></i> Deudas
                                         </a>
-                                    </li>
+                                    </li> --}}
                                     <li>
                                         <button type="button" class="dropdown-item"
                                             wire:click="openHistorialModal({{ $cartera->id }})" title="Ver historial">
