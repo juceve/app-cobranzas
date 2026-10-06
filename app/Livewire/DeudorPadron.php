@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Models\Deudacartera;
 use App\Models\User;
 use App\Models\Views\DeudorPadron as DeudorPadronView;
 use Illuminate\Database\Eloquent\Builder;
@@ -19,6 +20,8 @@ class DeudorPadron extends Component
     public string $ciudad = '';
 
     public bool $soloConCoordenadas = false;
+
+    public ?string $selectedCodigo = null;
 
     protected string $paginationTheme = 'bootstrap';
 
@@ -48,12 +51,23 @@ class DeudorPadron extends Component
         $this->resetPage();
     }
 
+    public function openDeudas(string $codigoCliente): void
+    {
+        $this->selectedCodigo = $codigoCliente;
+    }
+
+    public function closeDeudas(): void
+    {
+        $this->selectedCodigo = null;
+    }
+
     /**
      * Construye la query base con los filtros aplicados.
      */
     private function baseQuery(): Builder
     {
         return DeudorPadronView::query()
+            ->deEmpresaActual()
             ->buscar($this->search ?: null)
             ->deCiudad($this->ciudad ?: null)
             ->when($this->soloConCoordenadas, fn (Builder $q) => $q->conCoordenadas());
@@ -66,13 +80,13 @@ class DeudorPadron extends Component
     {
         $this->ensurePermission('deudores.export');
 
-        $filename = 'padron_deudores_' . now()->format('Ymd_His') . '.csv';
+        $filename = 'padron_deudores_'.now()->format('Ymd_His').'.csv';
 
         return response()->streamDownload(function () {
             $handle = fopen('php://output', 'w');
 
             // BOM UTF-8 para que Excel respete acentos
-            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
 
             fputcsv($handle, [
                 'RUT', 'Código Cliente', 'Cliente',
@@ -123,6 +137,7 @@ class DeudorPadron extends Component
             ->paginate(25);
 
         $ciudades = DeudorPadronView::query()
+            ->deEmpresaActual()
             ->select('ciu_nombre')
             ->whereNotNull('ciu_nombre')
             ->where('ciu_nombre', '<>', '')
@@ -130,14 +145,42 @@ class DeudorPadron extends Component
             ->orderBy('ciu_nombre')
             ->pluck('ciu_nombre');
 
-        $totalConCoordenadas = DeudorPadronView::query()->conCoordenadas()->count();
-        $totalGeneral        = DeudorPadronView::query()->count();
+        $totalConCoordenadas = DeudorPadronView::query()->deEmpresaActual()->conCoordenadas()->count();
+        $totalGeneral = DeudorPadronView::query()->deEmpresaActual()->count();
+
+        $codigos = $deudores->pluck('codigo_cliente')->filter()->unique()->all();
+
+        $resumenDeudas = Deudacartera::query()
+            ->deEmpresaActual()
+            ->where('ausente', false)
+            ->whereIn('codigo_cliente', $codigos)
+            ->selectRaw('codigo_cliente, COUNT(*) as total_deudas, SUM(saldo) as total_saldo')
+            ->groupBy('codigo_cliente')
+            ->get()
+            ->keyBy('codigo_cliente');
+
+        $deudorSeleccionado = $this->selectedCodigo === null
+            ? null
+            : DeudorPadronView::query()->where('codigo_cliente', $this->selectedCodigo)->first();
+
+        $deudasDeudor = $deudorSeleccionado === null
+            ? collect()
+            : Deudacartera::query()
+                ->deEmpresaActual()
+                ->with('cartera.company')
+                ->where('ausente', false)
+                ->where('codigo_cliente', $this->selectedCodigo)
+                ->orderBy('vence')
+                ->get();
 
         return view('livewire.deudor-padron', [
-            'deudores'             => $deudores,
-            'ciudades'             => $ciudades,
-            'totalConCoordenadas'  => $totalConCoordenadas,
-            'totalGeneral'         => $totalGeneral,
+            'deudores' => $deudores,
+            'ciudades' => $ciudades,
+            'totalConCoordenadas' => $totalConCoordenadas,
+            'totalGeneral' => $totalGeneral,
+            'resumenDeudas' => $resumenDeudas,
+            'deudorSeleccionado' => $deudorSeleccionado,
+            'deudasDeudor' => $deudasDeudor,
         ]);
     }
 

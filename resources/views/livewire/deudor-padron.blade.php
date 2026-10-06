@@ -119,6 +119,7 @@
                         <th class="d-none d-lg-table-cell">Dirección</th>
                         <th class="d-none d-xl-table-cell">Teléfono</th>
                         <th class="d-none d-xl-table-cell text-center">Coords</th>
+                        <th class="text-end">Deudas</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -159,10 +160,23 @@
                             <span class="badge rounded-pill text-bg-secondary">—</span>
                             @endif
                         </td>
+                        <td class="text-end text-nowrap">
+                            @php($resumen = $resumenDeudas->get($deudor->codigo_cliente))
+                            @if ($resumen)
+                            <span class="d-block fw-semibold">{{ number_format($resumen->total_saldo, 2) }}</span>
+                            <button type="button" class="btn btn-link btn-sm p-0"
+                                wire:click="openDeudas('{{ $deudor->codigo_cliente }}')">
+                                {{ $resumen->total_deudas }} {{ $resumen->total_deudas == 1 ? 'deuda' : 'deudas' }}
+                                <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+                            </button>
+                            @else
+                            <span class="small text-body-secondary">Sin deudas</span>
+                            @endif
+                        </td>
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="6" class="py-5 text-center text-body-secondary">
+                        <td colspan="7" class="py-5 text-center text-body-secondary">
                             <i class="bi bi-person-x d-block mb-2 fs-4" aria-hidden="true"></i>
                             No se encontraron deudores con los filtros aplicados.
                         </td>
@@ -176,4 +190,91 @@
         <div class="card-footer">{{ $deudores->links() }}</div>
         @endif
     </div>
+
+    @if ($deudorSeleccionado)
+    <div class="modal show d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="deudas-modal-title">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title h5" id="deudas-modal-title">{{ $deudorSeleccionado->cliente }}</h2>
+                    <button type="button" class="btn-close" wire:click="closeDeudas" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <dl class="row small mb-4">
+                        <dt class="col-sm-3">Código cliente</dt>
+                        <dd class="col-sm-9">{{ $deudorSeleccionado->codigo_cliente }}</dd>
+                        <dt class="col-sm-3">RUT</dt>
+                        <dd class="col-sm-9">{{ $deudorSeleccionado->rut_id ?: '—' }}</dd>
+                        <dt class="col-sm-3">Ciudad / Lugar</dt>
+                        <dd class="col-sm-9">{{ $deudorSeleccionado->ciu_nombre ?: '—' }}@if ($deudorSeleccionado->cli_lugar) · {{ $deudorSeleccionado->cli_lugar }}@endif</dd>
+                        <dt class="col-sm-3">Dirección</dt>
+                        <dd class="col-sm-9">{{ $deudorSeleccionado->direccion ?: 'Sin dirección' }}
+                            @if ($deudorSeleccionado->direcciones_distintas > 1)
+                            <span class="badge text-bg-secondary ms-1">{{ $deudorSeleccionado->direcciones_distintas }} direcciones</span>
+                            @endif
+                        </dd>
+                        <dt class="col-sm-3">Teléfono</dt>
+                        <dd class="col-sm-9">{{ $deudorSeleccionado->telefono ?: '—' }}</dd>
+                        <dt class="col-sm-3">Jefe / Supervisor / Vendedor</dt>
+                        <dd class="col-sm-9">
+                            {{ $deudorSeleccionado->ent_nombre_jefe_vendedor ?: '—' }} /
+                            {{ $deudorSeleccionado->ent_nombre_supervisor ?: '—' }} /
+                            {{ $deudorSeleccionado->ent_nombre_vendedor ?: '—' }}
+                        </dd>
+                        @if ($deudorSeleccionado->coordenada_x && $deudorSeleccionado->coordenada_y)
+                        <dt class="col-sm-3">Ubicación</dt>
+                        <dd class="col-sm-9">
+                            <a href="https://www.google.com/maps?q={{ $deudorSeleccionado->coordenada_y }},{{ $deudorSeleccionado->coordenada_x }}"
+                                target="_blank" rel="noopener noreferrer">Ver en Google Maps</a>
+                        </dd>
+                        @endif
+                    </dl>
+
+                    <h3 class="h6">Deudas ({{ $deudasDeudor->count() }})</h3>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle mb-0">
+                            <thead>
+                                <tr class="small text-body-secondary text-uppercase">
+                                    <th>N° Doc</th>
+                                    <th>Empresa</th>
+                                    <th>Vence</th>
+                                    <th class="text-end">Importe</th>
+                                    <th class="text-end">Saldo</th>
+                                    <th>Rango</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse ($deudasDeudor as $d)
+                                <tr wire:key="deuda-{{ $d->id }}">
+                                    <td>{{ $d->num_doc }}</td>
+                                    <td>{{ $d->cartera?->company?->name ?? '—' }}</td>
+                                    <td>{{ $d->vence?->format('d/m/Y') ?? '—' }}</td>
+                                    <td class="text-end">{{ number_format($d->importe, 2) }}</td>
+                                    <td class="text-end">{{ number_format($d->saldo, 2) }}</td>
+                                    <td>{{ $d->rango ?? '—' }}</td>
+                                </tr>
+                                @empty
+                                <tr>
+                                    <td colspan="6" class="text-center text-body-secondary py-3">Sin deudas vigentes.</td>
+                                </tr>
+                                @endforelse
+                            </tbody>
+                            <tfoot>
+                                <tr class="fw-semibold">
+                                    <td colspan="4" class="text-end">Total saldo</td>
+                                    <td class="text-end">{{ number_format($deudasDeudor->sum('saldo'), 2) }}</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" wire:click="closeDeudas">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+    @endif
 </div>

@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Deudacartera;
 use App\Models\Historialcartera;
 use App\Models\User;
+use App\Support\EmpresaActual;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -14,7 +15,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
@@ -24,29 +24,39 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
 class CarteraManagement extends Component
 {
-    use WithPagination;
     use WithFileUploads;
+    use WithPagination;
 
     public ?int $editingCarteraId = null;
+
     public string $companyId = '';
+
     public ?string $ultActualizacion = null;
+
     public string $search = '';
+
     public bool $showCarteraModal = false;
 
     protected string $paginationTheme = 'bootstrap';
 
     // ── Upload
     public ?int $uploadCarteraId = null;
+
     public $excelFile = null;
+
     public ?string $uploadOriginalName = null;
+
     public int $progress = 0;
+
     public bool $uploading = false;
+
     public bool $showUploadModal = false;
-    public bool $reemplazarDeudas = true;
 
     // ── Historial
     public bool $showHistorialModal = false;
+
     public ?int $historialCarteraId = null;
+
     public string $historialEstado = '';
 
     public function mount(): void
@@ -68,6 +78,7 @@ class CarteraManagement extends Component
     {
         $this->ensurePermission('carteras.create');
         $this->resetForm();
+        $this->companyId = (string) (EmpresaActual::id() ?? '');
         $this->showCarteraModal = true;
     }
 
@@ -92,7 +103,7 @@ class CarteraManagement extends Component
 
         $validated = $this->validate();
         $attributes = [
-            'company_id'        => (int) $validated['companyId'],
+            'company_id' => (int) $validated['companyId'],
             'ult_actualizacion' => $validated['ultActualizacion'] ?: null,
         ];
 
@@ -125,7 +136,7 @@ class CarteraManagement extends Component
         $this->ensurePermission('carteras.view');
 
         $this->historialCarteraId = $carteraId;
-        $this->historialEstado    = '';
+        $this->historialEstado = '';
         $this->resetPage('historialPage');
         $this->showHistorialModal = true;
     }
@@ -145,6 +156,7 @@ class CarteraManagement extends Component
     public function render()
     {
         $carteras = Cartera::query()
+            ->deEmpresaActual()
             ->with('company')
             ->withCount('deudacarteras')
             ->when($this->search !== '', function (Builder $query): void {
@@ -173,17 +185,16 @@ class CarteraManagement extends Component
             $historial = Historialcartera::query()
                 ->with('user')
                 ->where('cartera_id', $this->historialCarteraId)
-                ->when($this->historialEstado !== '', fn (Builder $q) =>
-                    $q->where('estado', $this->historialEstado)
+                ->when($this->historialEstado !== '', fn (Builder $q) => $q->where('estado', $this->historialEstado)
                 )
                 ->orderByDesc('fecha')
                 ->paginate(10, ['*'], 'historialPage');
         }
 
         return view('livewire.cartera-management', [
-            'carteras'         => $carteras,
-            'companies'        => $companies,
-            'historial'        => $historial,
+            'carteras' => $carteras,
+            'companies' => $companies,
+            'historial' => $historial,
             'historialCartera' => $historialCartera,
         ]);
     }
@@ -216,6 +227,7 @@ class CarteraManagement extends Component
     {
         $user = Auth::user();
         abort_unless($user instanceof User, 403);
+
         return $user;
     }
 
@@ -230,9 +242,8 @@ class CarteraManagement extends Component
         $this->reset(['excelFile', 'progress', 'uploading', 'uploadOriginalName']);
         $this->resetValidation();
 
-        $this->uploadCarteraId  = $carteraId;
-        $this->reemplazarDeudas = true;
-        $this->showUploadModal  = true;
+        $this->uploadCarteraId = $carteraId;
+        $this->showUploadModal = true;
     }
 
     public function closeUploadModal(): void
@@ -269,25 +280,26 @@ class CarteraManagement extends Component
 
         if (! $this->uploadCarteraId) {
             $this->addError('excelFile', 'No se ha seleccionado una cartera válida.');
+
             return;
         }
 
         $cartera = Cartera::findOrFail($this->uploadCarteraId);
 
         $this->uploading = true;
-        $this->progress  = 5;
+        $this->progress = 5;
         $this->dispatch('upload-start');
 
-        $storedPath   = null;
+        $storedPath = null;
         $originalName = null;
-        $hashFile     = null;
+        $hashFile = null;
 
         try {
             $originalName = $this->uploadOriginalName ?: $this->excelFile->getClientOriginalName();
 
             $extension = strtolower($this->excelFile->getClientOriginalExtension() ?: 'xlsx');
-            $safeBase  = Str::slug(pathinfo($originalName, PATHINFO_FILENAME)) ?: 'cartera';
-            $newName   = $safeBase . '_' . now()->format('Ymd_His') . '_' . Str::random(6) . '.' . $extension;
+            $safeBase = Str::slug(pathinfo($originalName, PATHINFO_FILENAME)) ?: 'cartera';
+            $newName = $safeBase.'_'.now()->format('Ymd_His').'_'.Str::random(6).'.'.$extension;
 
             $this->progress = 15;
             $this->dispatch('upload-progress', progress: $this->progress);
@@ -300,7 +312,9 @@ class CarteraManagement extends Component
             $absolutePath = Storage::disk('public')->path($storedPath);
             $hashFile = file_exists($absolutePath) ? hash_file('sha256', $absolutePath) : null;
 
-            // ── Calcular cambios ANTES de reemplazar (clave: NumDoc, criterio: Saldo)
+            $this->validarNumDocs($storedPath);
+
+            // ── Calcular cambios ANTES de sincronizar (clave: NumDoc, criterio: Saldo)
             $resumen = $this->calcularCambios($storedPath, $cartera);
 
             // ── Procesar Excel + historial dentro de una transacción
@@ -308,15 +322,15 @@ class CarteraManagement extends Component
                 $inserted = $this->processExcel($storedPath, $cartera);
 
                 Historialcartera::create([
-                    'cartera_id'   => $cartera->id,
-                    'fecha'        => now(),
-                    'cambios'      => $resumen['cambios'],
-                    'nuevos'       => $resumen['nuevos'],
-                    'salidas'      => $resumen['salidas'],
+                    'cartera_id' => $cartera->id,
+                    'fecha' => now(),
+                    'cambios' => $resumen['cambios'],
+                    'nuevos' => $resumen['nuevos'],
+                    'salidas' => $resumen['salidas'],
                     'doc_original' => $originalName,
-                    'hash'         => $hashFile,
-                    'user_id'      => Auth::id(),
-                    'estado'       => 'procesado',
+                    'hash' => $hashFile,
+                    'user_id' => Auth::id(),
+                    'estado' => 'procesado',
                 ]);
 
                 $cartera->update(['ult_actualizacion' => now()]);
@@ -331,9 +345,9 @@ class CarteraManagement extends Component
             $this->dispatch('cartera-notification',
                 icon: 'success',
                 message: "Se procesaron {$inserted} registros. "
-                    . "Cambios: {$resumen['cambios']}, "
-                    . "Nuevos: {$resumen['nuevos']}, "
-                    . "Salidas: {$resumen['salidas']}.",
+                    ."Cambios: {$resumen['cambios']}, "
+                    ."Nuevos: {$resumen['nuevos']}, "
+                    ."Salidas: {$resumen['salidas']}.",
             );
 
             $this->reset(['excelFile', 'uploadCarteraId', 'uploadOriginalName']);
@@ -350,34 +364,33 @@ class CarteraManagement extends Component
             );
 
             Log::error('Error al procesar cartera', [
-                'cartera_id'    => $cartera->id ?? null,
-                'stored_path'   => $storedPath,
+                'cartera_id' => $cartera->id ?? null,
+                'stored_path' => $storedPath,
                 'original_name' => $originalName,
-                'detalle'       => $detalle,
-                'trace'         => collect($e->getTrace())->take(10)->map(fn ($t) =>
-                    ($t['file'] ?? '?') . ':' . ($t['line'] ?? '?') . ' → ' . ($t['function'] ?? '?')
+                'detalle' => $detalle,
+                'trace' => collect($e->getTrace())->take(10)->map(fn ($t) => ($t['file'] ?? '?').':'.($t['line'] ?? '?').' → '.($t['function'] ?? '?')
                 )->all(),
             ]);
 
-            $this->addError('excelFile', 'Error: ' . $detalle);
+            $this->addError('excelFile', 'Error: '.$detalle);
 
             $this->dispatch('cartera-notification',
                 icon: 'error',
-                message: 'Error: ' . $e->getMessage(),
+                message: 'Error: '.$e->getMessage(),
             );
 
             if (isset($cartera) && $cartera instanceof Cartera) {
                 try {
                     Historialcartera::create([
-                        'cartera_id'   => $cartera->id,
-                        'fecha'        => now(),
-                        'cambios'      => 0,
-                        'nuevos'       => 0,
-                        'salidas'      => 0,
+                        'cartera_id' => $cartera->id,
+                        'fecha' => now(),
+                        'cambios' => 0,
+                        'nuevos' => 0,
+                        'salidas' => 0,
                         'doc_original' => $originalName,
-                        'hash'         => $hashFile,
-                        'user_id'      => Auth::id(),
-                        'estado'       => 'error',
+                        'hash' => $hashFile,
+                        'user_id' => Auth::id(),
+                        'estado' => 'error',
                     ]);
                 } catch (\Throwable $inner) {
                     report($inner);
@@ -385,7 +398,68 @@ class CarteraManagement extends Component
             }
         } finally {
             $this->uploading = false;
-            $this->progress  = 0;
+            $this->progress = 0;
+        }
+    }
+
+    /**
+     * Rechaza el archivo si hay llaves (num_doc + codigo_cliente) vacías o repetidas.
+     */
+    private function validarNumDocs(string $storedPath): void
+    {
+        $fullPath = Storage::disk('public')->path($storedPath);
+
+        $reader = IOFactory::createReaderForFile($fullPath);
+        $reader->setReadDataOnly(true);
+        $reader->setReadFilter(new class implements IReadFilter
+        {
+            public function readCell(string $columnAddress, int $row, string $worksheetName = ''): bool
+            {
+                return in_array($columnAddress, range('A', 'Y'), true);
+            }
+        });
+
+        $rows = $reader->load($fullPath)->getActiveSheet()->toArray(null, true, true, true);
+        unset($rows[array_key_first($rows)]); // encabezado
+
+        $vistos = [];
+        $vacios = [];
+        $repetidos = [];
+
+        foreach ($rows as $fila => $r) {
+            if ($this->isEmptyRow($r)) {
+                continue;
+            }
+
+            $doc = $this->normalizarNumDoc($r['B'] ?? null);
+            $codigo = $this->normalizarNumDoc($r['Q'] ?? null);
+
+            if ($doc === null || $codigo === null) {
+                $vacios[] = $fila;
+
+                continue;
+            }
+
+            $vistos[$this->llaveDeuda($doc, $codigo)][] = $fila;
+        }
+
+        foreach ($vistos as $doc => $filas) {
+            if (count($filas) > 1) {
+                $repetidos[] = "{$doc} (filas ".implode(', ', $filas).')';
+            }
+        }
+
+        $mensajes = [];
+        if ($repetidos !== []) {
+            $mensajes[] = 'Deudas repetidas (NumDoc|Cliente): '.implode('; ', array_slice($repetidos, 0, 10))
+                .(count($repetidos) > 10 ? '; y '.(count($repetidos) - 10).' más' : '');
+        }
+        if ($vacios !== []) {
+            $mensajes[] = 'Filas sin NumDoc o código de cliente: '.implode(', ', array_slice($vacios, 0, 10));
+        }
+
+        if ($mensajes !== []) {
+            throw new \RuntimeException('Archivo rechazado. '.implode('. ', $mensajes));
         }
     }
 
@@ -393,7 +467,7 @@ class CarteraManagement extends Component
      * Calcula cambios/nuevos/salidas.
      *
      * Reglas de negocio:
-     *  - Clave de identificación de deuda: NumDoc (columna B).
+     *  - Clave de identificación de deuda: NumDoc (B) + Código cliente (Q).
      *  - Criterio de cambio: Saldo (columna D) distinto.
      *  - Cuando hay NumDoc duplicados en el Excel, se conserva el ÚLTIMO (el que
      *    "reemplaza la fila").
@@ -404,17 +478,18 @@ class CarteraManagement extends Component
     {
         try {
             $saldosExcel = $this->leerSaldosDesdeExcel($storedPath); // ['NumDoc' => saldo, ...]
-            $docsExcel   = array_keys($saldosExcel);
+            $docsExcel = array_keys($saldosExcel);
 
             // Saldos actuales en BD (último saldo por NumDoc)
             $saldosActuales = Deudacartera::where('cartera_id', $cartera->id)
+                ->where('ausente', false)
                 ->orderBy('id')
-                ->get(['num_doc', 'saldo'])
-                ->mapWithKeys(fn ($d) => [(string) $d->num_doc => (float) $d->saldo])
+                ->get(['num_doc', 'codigo_cliente', 'saldo'])
+                ->mapWithKeys(fn ($d) => [$this->llaveDeuda($d->num_doc, $d->codigo_cliente) => (float) $d->saldo])
                 ->all();
 
             $docsActualesSet = array_flip(array_keys($saldosActuales));
-            $docsExcelSet    = array_flip($docsExcel);
+            $docsExcelSet = array_flip($docsExcel);
 
             // Nuevos: NumDoc en Excel que no existen en BD
             $nuevos = count(array_diff_key($docsExcelSet, $docsActualesSet));
@@ -435,11 +510,12 @@ class CarteraManagement extends Component
 
             return [
                 'cambios' => $cambios,
-                'nuevos'  => $nuevos,
+                'nuevos' => $nuevos,
                 'salidas' => $salidas,
             ];
         } catch (\Throwable $e) {
             report($e);
+
             return ['cambios' => 0, 'nuevos' => 0, 'salidas' => 0];
         }
     }
@@ -456,26 +532,27 @@ class CarteraManagement extends Component
 
         $reader = IOFactory::createReaderForFile($fullPath);
         $reader->setReadDataOnly(true);
-        $reader->setReadFilter(new class implements IReadFilter {
+        $reader->setReadFilter(new class implements IReadFilter
+        {
             public function readCell(string $columnAddress, int $row, string $worksheetName = ''): bool
             {
-                return in_array($columnAddress, ['B', 'D'], true);
+                return in_array($columnAddress, ['B', 'D', 'Q'], true);
             }
         });
 
         $spreadsheet = $reader->load($fullPath);
-        $sheet       = $spreadsheet->getActiveSheet();
-        $rows        = $sheet->toArray(null, true, true, true);
+        $sheet = $spreadsheet->getActiveSheet();
+        $rows = $sheet->toArray(null, true, true, true);
 
         array_shift($rows); // encabezado
 
         $result = [];
         foreach ($rows as $r) {
-            $doc   = $this->toStr($r['B'] ?? null);
-            $saldo = $this->toDecimal($r['D'] ?? null);
+            $doc = $this->normalizarNumDoc($r['B'] ?? null);
+            $codigo = $this->normalizarNumDoc($r['Q'] ?? null);
 
-            if ($doc !== null) {
-                $result[$doc] = $saldo; // el último gana
+            if ($doc !== null && $codigo !== null) {
+                $result[$this->llaveDeuda($doc, $codigo)] = $this->toDecimal($r['D'] ?? null);
             }
         }
 
@@ -489,7 +566,8 @@ class CarteraManagement extends Component
         $reader = IOFactory::createReaderForFile($fullPath);
         $reader->setReadDataOnly(true);
         $reader->setReadEmptyCells(false);
-        $reader->setReadFilter(new class implements IReadFilter {
+        $reader->setReadFilter(new class implements IReadFilter
+        {
             public function readCell(string $columnAddress, int $row, string $worksheetName = ''): bool
             {
                 return in_array($columnAddress, range('A', 'Y'), true);
@@ -497,8 +575,8 @@ class CarteraManagement extends Component
         });
 
         $spreadsheet = $reader->load($fullPath);
-        $sheet       = $spreadsheet->getActiveSheet();
-        $rows        = $sheet->toArray(null, true, true, true);
+        $sheet = $spreadsheet->getActiveSheet();
+        $rows = $sheet->toArray(null, true, true, true);
 
         if (empty($rows)) {
             throw new \RuntimeException('El archivo Excel está vacío.');
@@ -506,12 +584,11 @@ class CarteraManagement extends Component
 
         array_shift($rows);
 
-        if ($this->reemplazarDeudas) {
-            Deudacartera::where('cartera_id', $cartera->id)->delete();
-        }
+        // Las que no vengan en este archivo quedan ausentes; las que vengan se reactivan en el upsert.
+        Deudacartera::where('cartera_id', $cartera->id)->update(['ausente' => true]);
 
-        $total    = count($rows);
-        $i        = 0;
+        $total = count($rows);
+        $i = 0;
         $inserted = 0;
 
         foreach (array_chunk($rows, 500) as $chunk) {
@@ -523,39 +600,41 @@ class CarteraManagement extends Component
                 }
 
                 $batch[] = [
-                    'cartera_id'               => $cartera->id,
-                    'fecha'                    => $this->toDate($r['A'] ?? null),
-                    'num_doc'                  => $this->toStr($r['B'] ?? null),
-                    'importe'                  => $this->toDecimal($r['C'] ?? null),
-                    'saldo'                    => $this->toDecimal($r['D'] ?? null),
-                    'vence'                    => $this->toDate($r['E'] ?? null),
-                    'antiguedad'               => $this->toInt($r['F'] ?? null),
-                    'anticuacion'              => $this->toStr($r['G'] ?? null),
-                    'rango'                    => $this->toStr($r['H'] ?? null),
-                    'cliente'                  => $this->toStr($r['I'] ?? null),
-                    'cli_lugar'                => $this->toStr($r['J'] ?? null),
+                    'cartera_id' => $cartera->id,
+                    'fecha' => $this->toDate($r['A'] ?? null),
+                    'num_doc' => $this->normalizarNumDoc($r['B'] ?? null),
+                    'importe' => $this->toDecimal($r['C'] ?? null),
+                    'saldo' => $this->toDecimal($r['D'] ?? null),
+                    'vence' => $this->toDate($r['E'] ?? null),
+                    'antiguedad' => $this->toInt($r['F'] ?? null),
+                    'anticuacion' => $this->toStr($r['G'] ?? null),
+                    'rango' => $this->toStr($r['H'] ?? null),
+                    'cliente' => $this->toStr($r['I'] ?? null),
+                    'cli_lugar' => $this->toStr($r['J'] ?? null),
                     'ent_nombre_jefe_vendedor' => $this->toStr($r['K'] ?? null),
-                    'ent_nombre_supervisor'    => $this->toStr($r['L'] ?? null),
-                    'ent_nombre_vendedor'      => $this->toStr($r['M'] ?? null),
-                    'plazo'                    => $this->toInt($r['N'] ?? null),
-                    'fecha_ultimo_pago'        => $this->toDate($r['O'] ?? null),
-                    'ciu_nombre'               => $this->toStr($r['P'] ?? null),
-                    'codigo_cliente'           => $this->toStr($r['Q'] ?? null),
-                    'limite_credito'           => $this->toDecimal($r['R'] ?? null),
-                    'rut_id'                   => $this->toStr($r['S'] ?? null),
-                    'coordenada_x'             => $this->toDecimal($r['T'] ?? null),
-                    'coordenada_y'             => $this->toDecimal($r['U'] ?? null),
-                    'telefono'                 => $this->toStr($r['V'] ?? null),
-                    'estado'                   => $this->toStr($r['W'] ?? null),
-                    'direccion'                => $this->toStr($r['X'] ?? null),
-                    'fecha_carga'              => $this->toDate($r['Y'] ?? null),
-                    'created_at'               => now(),
-                    'updated_at'               => now(),
+                    'ent_nombre_supervisor' => $this->toStr($r['L'] ?? null),
+                    'ent_nombre_vendedor' => $this->toStr($r['M'] ?? null),
+                    'plazo' => $this->toInt($r['N'] ?? null),
+                    'fecha_ultimo_pago' => $this->toDate($r['O'] ?? null),
+                    'ciu_nombre' => $this->toStr($r['P'] ?? null),
+                    'codigo_cliente' => $this->normalizarNumDoc($r['Q'] ?? null),
+                    'limite_credito' => $this->toDecimal($r['R'] ?? null),
+                    'rut_id' => $this->toStr($r['S'] ?? null),
+                    'coordenada_x' => $this->toDecimal($r['T'] ?? null),
+                    'coordenada_y' => $this->toDecimal($r['U'] ?? null),
+                    'telefono' => $this->toStr($r['V'] ?? null),
+                    'estado' => $this->toStr($r['W'] ?? null),
+                    'direccion' => $this->toStr($r['X'] ?? null),
+                    'fecha_carga' => $this->toDate($r['Y'] ?? null),
+                    'ausente' => false,
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ];
             }
 
             if (! empty($batch)) {
-                Deudacartera::insert($batch);
+                $columnas = array_diff(array_keys($batch[0]), ['cartera_id', 'num_doc', 'codigo_cliente', 'created_at']);
+                Deudacartera::upsert($batch, ['cartera_id', 'num_doc', 'codigo_cliente'], array_values($columnas));
                 $inserted += count($batch);
             }
 
@@ -578,6 +657,7 @@ class CarteraManagement extends Component
                 return false;
             }
         }
+
         return true;
     }
 
@@ -590,6 +670,7 @@ class CarteraManagement extends Component
         try {
             if (is_numeric($value) && $value > 1000 && $value < 100000) {
                 $dt = ExcelDate::excelToDateTimeObject((float) $value);
+
                 return Carbon::instance($dt)->toDateString();
             }
 
@@ -627,7 +708,7 @@ class CarteraManagement extends Component
 
         if (str_contains($str, ',') && str_contains($str, '.')) {
             $lastComma = strrpos($str, ',');
-            $lastDot   = strrpos($str, '.');
+            $lastDot = strrpos($str, '.');
             if ($lastComma > $lastDot) {
                 $str = str_replace('.', '', $str);
                 $str = str_replace(',', '.', $str);
@@ -643,20 +724,46 @@ class CarteraManagement extends Component
 
     private function toInt($value): ?int
     {
-        if ($value === null || $value === '') return null;
-        if (is_int($value)) return $value;
-        if (is_float($value)) return (int) $value;
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (is_int($value)) {
+            return $value;
+        }
+        if (is_float($value)) {
+            return (int) $value;
+        }
 
         $str = trim((string) $value);
-        if ($str === '' || Str::startsWith($str, '=')) return null;
+        if ($str === '' || Str::startsWith($str, '=')) {
+            return null;
+        }
+
         return is_numeric($str) ? (int) $str : null;
+    }
+
+    private function llaveDeuda(?string $numDoc, ?string $codigoCliente): string
+    {
+        return Str::upper(trim((string) $numDoc)).'|'.Str::upper(trim((string) $codigoCliente));
+    }
+
+    private function normalizarNumDoc($value): ?string
+    {
+        $str = $this->toStr($value);
+
+        return $str === null ? null : Str::upper($str);
     }
 
     private function toStr($value): ?string
     {
-        if ($value === null) return null;
+        if ($value === null) {
+            return null;
+        }
         $str = trim((string) $value);
-        if ($str === '' || Str::startsWith($str, '=')) return null;
+        if ($str === '' || Str::startsWith($str, '=')) {
+            return null;
+        }
+
         return $str;
     }
 }

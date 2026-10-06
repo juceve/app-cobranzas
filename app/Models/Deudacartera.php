@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\EmpresaActual;
 use Illuminate\Database\Eloquent\Model;
 
 class Deudacartera extends Model
@@ -17,16 +18,16 @@ class Deudacartera extends Model
     ];
 
     protected $casts = [
-        'fecha'             => 'date',
-        'vence'             => 'date',
+        'fecha' => 'date',
+        'vence' => 'date',
         'fecha_ultimo_pago' => 'date',
-        'fecha_carga'       => 'date',
-        'importe'           => 'decimal:2',
-        'saldo'             => 'decimal:2',
-        'limite_credito'    => 'decimal:2',
-        'coordenada_x'      => 'decimal:8',
-        'coordenada_y'      => 'decimal:8',
-        'ausente'           => 'boolean',
+        'fecha_carga' => 'date',
+        'importe' => 'decimal:2',
+        'saldo' => 'decimal:2',
+        'limite_credito' => 'decimal:2',
+        'coordenada_x' => 'decimal:8',
+        'coordenada_y' => 'decimal:8',
+        'ausente' => 'boolean',
     ];
 
     public function cartera()
@@ -34,16 +35,29 @@ class Deudacartera extends Model
         return $this->belongsTo(Cartera::class, 'cartera_id', 'id');
     }
 
+    public function scopeDeEmpresaActual($query)
+    {
+        $empresaId = EmpresaActual::id();
+
+        return $empresaId === null
+            ? $query
+            : $query->whereIn(
+                $this->qualifyColumn('cartera_id'),
+                Cartera::query()->where('company_id', $empresaId)->select('id')
+            );
+    }
+
     public function lotes()
     {
         return $this->belongsToMany(Lote::class, 'lote_deuda')
-                    ->withPivot(['estado_gestion', 'fecha_gestion', 'observacion', 'monto_recuperado', 'gestionado_por'])
-                    ->withTimestamps();
+            ->withPivot(['estado_gestion', 'fecha_gestion', 'observacion', 'monto_recuperado', 'gestionado_por'])
+            ->withTimestamps();
     }
 
     public function getPorcentajeAttribute(): float
     {
         $importe = (float) $this->importe;
+
         return $importe > 0 ? round(((float) $this->saldo / $importe) * 100, 2) : 0;
     }
 }

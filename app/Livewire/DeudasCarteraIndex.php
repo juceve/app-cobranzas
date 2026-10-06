@@ -4,7 +4,7 @@ namespace App\Livewire;
 
 use App\Models\Cartera;
 use App\Models\Deudacartera;
-use App\Models\User;
+use App\Support\EmpresaActual;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -15,20 +15,28 @@ class DeudasCarteraIndex extends Component
 
     public Cartera $cartera;
 
-    public string $search        = '';
-    public string $estado        = '';
-    public string $rango         = '';
-    public string $orderBy       = 'id';
-    public string $orderDir      = 'desc';
-    public int    $perPage       = 25;
-    public ?string $saldoMin     = null;
-    public ?string $saldoMax     = null;
+    public string $search = '';
+
+    public string $estado = '';
+
+    public string $rango = '';
+
+    public string $orderBy = 'id';
+
+    public string $orderDir = 'desc';
+
+    public int $perPage = 25;
+
+    public ?string $saldoMin = null;
+
+    public ?string $saldoMax = null;
 
     protected string $paginationTheme = 'bootstrap';
 
     public function mount(Cartera $cartera): void
     {
         abort_unless(auth()->user()?->can('carteras.view'), 403);
+        abort_if(EmpresaActual::id() !== null && $cartera->company_id !== EmpresaActual::id(), 404);
         $this->cartera = $cartera->load('company');
     }
 
@@ -41,14 +49,14 @@ class DeudasCarteraIndex extends Component
 
     public function sortBy(string $column): void
     {
-        if (! in_array($column, ['id','num_doc','cliente','saldo','importe','vence','antiguedad','fecha'], true)) {
+        if (! in_array($column, ['id', 'num_doc', 'cliente', 'saldo', 'importe', 'vence', 'antiguedad', 'fecha'], true)) {
             return;
         }
 
         if ($this->orderBy === $column) {
             $this->orderDir = $this->orderDir === 'asc' ? 'desc' : 'asc';
         } else {
-            $this->orderBy  = $column;
+            $this->orderBy = $column;
             $this->orderDir = 'asc';
         }
     }
@@ -66,10 +74,10 @@ class DeudasCarteraIndex extends Component
             ->when($this->search !== '', function (Builder $q) {
                 $q->where(function (Builder $qq) {
                     $qq->where('num_doc', 'ilike', "%{$this->search}%")
-                       ->orWhere('cliente', 'ilike', "%{$this->search}%")
-                       ->orWhere('codigo_cliente', 'ilike', "%{$this->search}%")
-                       ->orWhere('rut_id', 'ilike', "%{$this->search}%")
-                       ->orWhere('telefono', 'ilike', "%{$this->search}%");
+                        ->orWhere('cliente', 'ilike', "%{$this->search}%")
+                        ->orWhere('codigo_cliente', 'ilike', "%{$this->search}%")
+                        ->orWhere('rut_id', 'ilike', "%{$this->search}%")
+                        ->orWhere('telefono', 'ilike', "%{$this->search}%");
                 });
             })
             ->when($this->estado !== '', fn (Builder $q) => $q->where('estado', $this->estado))
@@ -87,13 +95,13 @@ class DeudasCarteraIndex extends Component
             ->distinct()->orderBy('rango')->pluck('rango')->filter()->values();
 
         return view('livewire.deudas-cartera-index', [
-            'deudas'  => $deudas,
+            'deudas' => $deudas,
             'estados' => $estados,
-            'rangos'  => $rangos,
+            'rangos' => $rangos,
             'totales' => [
                 'registros' => Deudacartera::where('cartera_id', $this->cartera->id)->count(),
-                'saldo'     => (float) Deudacartera::where('cartera_id', $this->cartera->id)->sum('saldo'),
-                'importe'   => (float) Deudacartera::where('cartera_id', $this->cartera->id)->sum('importe'),
+                'saldo' => (float) Deudacartera::where('cartera_id', $this->cartera->id)->sum('saldo'),
+                'importe' => (float) Deudacartera::where('cartera_id', $this->cartera->id)->sum('importe'),
             ],
         ])->extends('adminlte::page');
     }

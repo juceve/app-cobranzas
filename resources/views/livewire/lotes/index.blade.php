@@ -8,6 +8,23 @@
                 Administra y da seguimiento a los lotes asignados.
             </p>
         </div>
+        @if ($carteras->isNotEmpty())
+        <div class="dropdown">
+            <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-plus-circle me-1"></i> Nuevo lote
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                <li><h6 class="dropdown-header">Armar desde la cartera de:</h6></li>
+                @foreach ($carteras as $cartera)
+                <li>
+                    <a class="dropdown-item" href="{{ route('carteras.constructor-lotes', $cartera) }}" wire:navigate>
+                        {{ $cartera->company?->name ?? 'Cartera #'.$cartera->id }}
+                    </a>
+                </li>
+                @endforeach
+            </ul>
+        </div>
+        @endif
     </div>
 
     <div class="card border-0 shadow-sm mb-3">
@@ -37,7 +54,7 @@
     <div class="card border-0 shadow-sm">
         <div class="table-responsive">
             <table class="table table-sm table-hover align-middle mb-0">
-                <thead class="table-light">
+                <thead>
                     <tr>
                         <th>Código</th>
                         <th>Nombre</th>
@@ -47,6 +64,7 @@
                         <th>Asignado</th>
                         <th>Límite</th>
                         <th>Estado</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -64,10 +82,15 @@
                                     {{ str_replace('_', ' ', $l->estado) }}
                                 </span>
                             </td>
+                            <td class="text-end">
+                                <a href="{{ route('lotes.show', $l) }}" class="btn btn-sm btn-outline-primary" wire:navigate>
+                                    <i class="bi bi-eye"></i> Ver
+                                </a>
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="text-center py-4 text-body-secondary">
+                            <td colspan="9" class="text-center py-4 text-body-secondary">
                                 No hay lotes registrados.
                             </td>
                         </tr>

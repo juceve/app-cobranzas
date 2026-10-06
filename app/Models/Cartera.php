@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\EmpresaActual;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -12,12 +14,11 @@ use Illuminate\Database\Eloquent\Model;
  * @property $ult_actualizacion
  * @property $created_at
  * @property $updated_at
- *
  * @property Company $company
  * @property Deudacartera[] $deudacarteras
  * @property Historialcartera[] $historialcarteras
- * @package App
- * @mixin \Illuminate\Database\Eloquent\Builder
+ *
+ * @mixin Builder
  */
 class Cartera extends Model
 {
@@ -27,16 +28,23 @@ class Cartera extends Model
 
     public function company()
     {
-        return $this->belongsTo(\App\Models\Company::class, 'company_id', 'id');
+        return $this->belongsTo(Company::class, 'company_id', 'id');
+    }
+
+    public function scopeDeEmpresaActual($query)
+    {
+        $empresaId = EmpresaActual::id();
+
+        return $empresaId === null ? $query : $query->where($this->qualifyColumn('company_id'), $empresaId);
     }
 
     public function deudacarteras()
     {
-        return $this->hasMany(\App\Models\Deudacartera::class, 'cartera_id', 'id');
+        return $this->hasMany(Deudacartera::class, 'cartera_id', 'id');
     }
 
     public function historialcarteras()
     {
-        return $this->hasMany(\App\Models\Historialcartera::class, 'cartera_id', 'id');
+        return $this->hasMany(Historialcartera::class, 'cartera_id', 'id');
     }
 }

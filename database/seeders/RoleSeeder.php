@@ -60,19 +60,18 @@ class RoleSeeder extends Seeder
 
             // Plataforma del cobrador (mobile/desktop)
             ['name' => 'cobrador.access',      'group' => 'Cobrador', 'display_name' => 'Acceder a la plataforma del cobrador'],
-            ['name' => 'cobrador.gestionar',   'group' => 'Cobrador', 'display_name' => 'Registrar gestiones de cobro'],
-        ])->map(fn(array $p) => Permission::firstOrCreate(
-            ['name' => $p['name'], 'guard_name' => 'web'],
-            ['group' => $p['group'], 'display_name' => $p['display_name']],
-        ));
+            ['name' => 'cobrador.gestionar',   'group' => 'Cobrador', 'display_name' => 'Registrar gestiones de cobro'],            ['name' => 'cobrador.cobrar', 'group' => 'Cobrador', 'display_name' => 'Registrar cobros recibidos'],        ])->map(fn (array $p) => Permission::firstOrCreate(
+                ['name' => $p['name'], 'guard_name' => 'web'],
+                ['group' => $p['group'], 'display_name' => $p['display_name']],
+            ));
 
         // ─────────────────────────────────────────────
         //  ROLES
         // ─────────────────────────────────────────────
-        $adminRole    = Role::firstOrCreate(['name' => 'Admin',         'guard_name' => 'web']);
+        $adminRole = Role::firstOrCreate(['name' => 'Admin',         'guard_name' => 'web']);
         $jefeVenta = Role::firstOrCreate(['name' => 'JefeVentas', 'guard_name' => 'web']);
         $cobradorRole = Role::firstOrCreate(['name' => 'Cobrador',      'guard_name' => 'web']);
-        $guestRole    = Role::firstOrCreate(['name' => 'Guest',         'guard_name' => 'web']);
+        $guestRole = Role::firstOrCreate(['name' => 'Guest',         'guard_name' => 'web']);
 
         // ─────────────────────────────────────────────
         //  ASIGNACIÓN DE PERMISOS
@@ -94,6 +93,7 @@ class RoleSeeder extends Seeder
             'lotes.update',
             'lotes.assign',
             'lotes.cancel',
+            'lotes.close',
         ]);
 
         // Cobrador: solo plataforma de campo, ve sus propios lotes
@@ -101,6 +101,7 @@ class RoleSeeder extends Seeder
             'home',
             'cobrador.access',
             'cobrador.gestionar',
+            'cobrador.cobrar',
             'lotes.view',       // solo los suyos (se filtra por cobrador_id)
         ]);
 

@@ -16,6 +16,10 @@
 
             {{-- Custom left links --}}
             @yield('content_top_nav_left')
+
+            @if(Auth::user())
+                <li class="nav-item ms-2">@livewire('empresa-selector')</li>
+            @endif
         </ul>
 
         {{-- Navbar right links --}}

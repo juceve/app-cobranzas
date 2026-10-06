@@ -92,6 +92,14 @@
                                             <i class="bi bi-list-ul"></i> Ver deudas
                                         </button>
                                     </li>
+                                    @can('lotes.create')
+                                    <li>
+                                        <a href="{{ route('carteras.constructor-lotes', $cartera) }}" class="dropdown-item"
+                                            wire:navigate>
+                                            <i class="bi bi-boxes"></i> Armar lotes
+                                        </a>
+                                    </li>
+                                    @endcan
                                     <li>
                                         <hr class="dropdown-divider">
                                     </li>
