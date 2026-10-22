@@ -202,4 +202,17 @@ class UserManagement extends Component
 
         return $user;
     }
+
+    public function resetPassword(int $userId): void
+    {
+        $this->ensurePermission('users.update');
+
+        $user = User::findOrFail($userId);
+        $user->password = bcrypt('12345678'); // Replace 'newpassword' with your desired default password
+        $user->save();
+         $message = 'La contraseña del usuario fue restablecida correctamente.';
+
+        $this->resetForm();
+        $this->dispatch('user-notification', icon: 'success', message: $message);
+    }
 }

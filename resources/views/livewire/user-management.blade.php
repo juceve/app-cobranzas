@@ -72,6 +72,11 @@
                                                         <i class="bi bi-pencil-square me-2" aria-hidden="true"></i> Editar
                                                     </button>
                                                 </li>
+                                                <li>
+                                                    <button type="button" class="dropdown-item" wire:click="resetPassword({{ $user->id }})">
+                                                        <i class="bi bi-key me-2" aria-hidden="true"></i> Reset
+                                                    </button>
+                                                </li>
                                             @endcan
                                             @can('users.disable')
                                                 <li>
